@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Recursive } from "next/font/google";
 import "./globals.css";
+import Providers from "@/components/Providers";
+import { AuthProvider } from "@/context/AuthContext";
 
-const inter = Inter({ subsets: ["latin"] });
+const recursive = Recursive({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -16,7 +18,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className={recursive.className}>
+        <AuthProvider>
+
+        
+        <Providers>
+          {/* Move all client components inside Providers */}
+          <div className="flex grainy-dark flex-col min-h-screen">
+            {children}
+          </div>
+        </Providers>
+        </AuthProvider>
+      </body>
     </html>
   );
 }
