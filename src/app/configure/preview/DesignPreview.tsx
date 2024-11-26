@@ -39,6 +39,7 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
     return null;
   }
 
+  // Retrieve product details from the configuration
   const color = configuration.color || 'defaultColor';
   const model = configuration.model || 'defaultModel';
   const finish = configuration.finish || 'defaultFinish';
@@ -50,34 +51,44 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
   const tw = colorConfig?.tw || 'gray-200';
   const modelLabel = modelConfig?.label || 'Phone';
 
+  // Calculate total price
   let totalPrice = BASE_PRICE;
   if (material === 'polycarbonate') totalPrice += PRODUCT_PRICES.material.polycarbonate;
   if (finish === 'textured') totalPrice += PRODUCT_PRICES.finish.textured;
 
+  // Handle checkout process
   const handleCheckout = async (): Promise<void> => {
     try {
-      const user = auth.currentUser;
-      if (!user) {
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
         setIsLoginModalOpen(true);
+        toast({
+          title: 'Authentication Required',
+          description: 'Please log in to proceed with checkout.',
+          variant: 'destructive',
+        });
         return;
       }
 
       setIsProcessing(true);
 
-      const token = await user.getIdToken(true);
-      
-      const userToken = await user.getIdTokenResult()
-      const tokenExpirationTime = new Date(userToken.expirationTime).toLocaleString("en-US", { timeZone: "Africa/Lagos" });
-      console.log("Token expires at:", tokenExpirationTime);
-      console.log(userToken, token)
-      
+      // Call the checkout API
       const response = await fetch('/api/checkout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ configurationId: configuration.id }),
+        body: JSON.stringify({
+          configurationId: {
+            id: configuration.id,
+            finish,
+            material,
+            model,
+            imageUrl: configuration.croppedImageUrl,
+            unitAmount: totalPrice, // Pass calculated price to the backend
+          },
+        }),
       });
 
       if (!response.ok) {
@@ -90,6 +101,7 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
         throw new Error('Invalid response format, expected "url" field.');
       }
 
+      // Redirect to Stripe checkout
       window.location.href = data.url;
     } catch (error) {
       console.error('Checkout error:', error);
@@ -105,6 +117,7 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
 
   return (
     <>
+      {/* Confetti animation */}
       <div
         aria-hidden="true"
         className="pointer-events-none select-none absolute inset-0 overflow-hidden flex justify-center"
@@ -112,33 +125,41 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
         <Confetti active={showConfetti} config={{ elementCount: 200, spread: 90 }} />
       </div>
 
+      {/* Login Modal */}
       <LoginModal isOpen={isLoginModalOpen} setIsOpen={setIsLoginModalOpen} />
 
+      {/* Product Preview */}
       <div className="mt-20 flex flex-col items-center md:grid text-sm sm:grid-cols-12 sm:gap-x-6 md:gap-x-8 lg:gap-x-12">
         <div className="md:col-span-4 lg:col-span-3 md:row-span-2 md:row-end-2">
-          <Phone 
-            className={cn(tw ? `bg-${tw}` : 'bg-gray-200', 'max-w-[150px] md:max-w-full')} 
-            imgSrc={configuration.croppedImageUrl!} 
+          <Phone
+            className={cn(tw ? `bg-${tw}` : 'bg-gray-200', 'max-w-[150px] md:max-w-full')}
+            imgSrc={configuration.croppedImageUrl!}
           />
         </div>
 
+        {/* Product Information */}
         <div className="mt-6 sm:col-span-9 md:row-end-1">
-          <h3 className="text-3xl font-bold tracking-tight text-gray-900">Your {modelLabel} Case</h3>
+          <h3 className="text-3xl font-bold tracking-tight text-gray-900">
+            Your {modelLabel} Case
+          </h3>
           <div className="mt-3 flex items-center gap-1.5 text-base">
             <Check className="h-4 w-4 text-green-500" />
             In stock and ready to ship
           </div>
         </div>
 
+        {/* Price Summary */}
         <div className="sm:col-span-12 md:col-span-9 text-base">
           <div className="mt-8">
             <div className="bg-gray-50 p-6 sm:rounded-lg sm:p-8">
               <div className="flow-root text-sm">
+                {/* Base Price */}
                 <div className="flex items-center justify-between py-1 mt-2">
                   <p className="text-gray-600">Base price</p>
                   <p className="font-medium text-gray-900">{formatPrice(BASE_PRICE / 100)}</p>
                 </div>
 
+                {/* Additional Costs */}
                 {finish === 'textured' && (
                   <div className="flex items-center justify-between py-1 mt-2">
                     <p className="text-gray-600">Textured finish</p>
@@ -157,8 +178,10 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
                   </div>
                 )}
 
+                {/* Divider */}
                 <div className="my-2 h-px bg-gray-200" />
 
+                {/* Total Price */}
                 <div className="flex items-center justify-between py-2">
                   <p className="font-semibold text-gray-900">Order total</p>
                   <p className="font-semibold text-gray-900">{formatPrice(totalPrice / 100)}</p>
@@ -166,6 +189,7 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
               </div>
             </div>
 
+            {/* Checkout Button */}
             <div className="mt-8 flex justify-end pb-12">
               <Button
                 onClick={handleCheckout}

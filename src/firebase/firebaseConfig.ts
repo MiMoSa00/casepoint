@@ -12,131 +12,69 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
 let app;
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
 } else {
-  app = getApp(); // If already initialized, use that one
+  app = getApp();
 }
 
-// Export Firebase services
 const auth = getAuth();
 onAuthStateChanged(auth, (user) => {
   if (user) {
-    // Set up a token refresh mechanism
     let tokenRefreshTimeout: NodeJS.Timeout;
 
-    console.log(user, auth)
-    // const refreshToken = async () => {
-    //   try {
-    //     // Get the current user
-    //     const user = auth.currentUser;
-    //     if (!user) {
-    //       console.error('No user logged in');
-    //       return;
-    //     }
-    
-    //     // Get the current token expiration time
-    //     const tokenResult = await user.getIdTokenResult();
-    //     console.log(tokenResult)
-    //     const expirationTime = tokenResult.expirationTime
-    //       ? new Date(tokenResult.expirationTime).getTime()
-    //       : 0;
-    //     const now = new Date().getTime();
-    //     console.log("Current time:", now);
-    //     console.log("Token expiration time:", expirationTime);
-    
-    //     // If the token will expire in the next 5 minutes, refresh it
-    //     if (expirationTime - now < 5 * 60 * 1000) {
-    //       // Force refresh the token
-    //       await user.getIdToken(true);
-    //       console.log('Token refreshed successfully');
-    //     }
-    
-    //     // Set up the next refresh
-    //     tokenRefreshTimeout = setTimeout(refreshToken, 5 * 60 * 1000); // Refresh every 5 minutes
-    //   } catch (error) {
-    //     console.error('Token refresh error:', error);
-    
-    //     // If token refresh fails, try again in 1 minute
-    //     tokenRefreshTimeout = setTimeout(refreshToken, 60 * 1000);
-    //   }
-    // };
-    // const refreshToken = async () => {
-    //   try {
-        
-    //     const user = auth.currentUser;
-    //     if (!user) {
-    //       console.error('No user logged in');
-    //       return;
-    //     }
-    
-    //     // Force refresh the token to ensure up-to-date data
-    //     const tokenResult = await user.getIdTokenResult(true);
-    //     console.log('Token details:', tokenResult);
-    
-    //     // Parse the expiration time and issued time
-    //     const expirationTime = tokenResult.expirationTime 
-    //       ? new Date(tokenResult.expirationTime).getTime() 
-    //       : 0;
-    //     const issuedAtTime = tokenResult.issuedAtTime 
-    //       ? new Date(tokenResult.issuedAtTime).getTime() 
-    //       : 0;
-    //     const now = new Date().getTime();
-    
-    //     console.log('Current time:', now);
-    //     console.log('Token issued at time:', issuedAtTime);
-    //     console.log('Token expiration time:', expirationTime);
-    
-    //     // Check for any clock discrepancy and handle it
-    //     if (expirationTime <= now) {
-    //       console.warn(
-    //         'Token appears expired (or very close to expiring). Refreshing immediately...'
-    //       );
-    //       await user.getIdToken(true); // Force refresh again
-    //       console.log('Token refreshed successfully');
-    //     } else if (expirationTime - now < 5 * 60 * 1000) {
-    //       console.warn(
-    //         'Token is expiring soon (less than 5 minutes remaining). Refreshing...'
-    //       );
-    //       await user.getIdToken(true); // Force refresh if close to expiration
-    //       console.log('Token refreshed successfully');
-    //     } else {
-    //       console.log('Token is valid, no immediate refresh needed.');
-    //     }
-    
-    //     // Adjust next refresh timing dynamically, based on expiration
-    //     const bufferTime = 5 * 60 * 1000; // 5-minute buffer
-    //     const nextRefreshTime = Math.max(expirationTime - now - bufferTime, bufferTime);
-    //     console.log(`Scheduling next refresh in ${nextRefreshTime / 1000} seconds`);
-    //     tokenRefreshTimeout = setTimeout(refreshToken, nextRefreshTime);
-    
-    //   } catch (error) {
-    //     console.error('Token refresh error:', error);
-    
-    //     // Retry refreshing in 1 minute if there's an error
-    //     tokenRefreshTimeout = setTimeout(refreshToken, 60 * 1000);
-    //   }
-    // };
-    
-    // refreshToken();
-   
-    // Initial token refresh
-   
-   
+    const refreshToken = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          console.error('No user logged in');
+          return;
+        }
 
-    // return () => {
-    //   if (tokenRefreshTimeout) {
-    //     clearTimeout(tokenRefreshTimeout);
-    //   } 
-    // };
+
+        
+        const tokenResult = await user.getIdTokenResult(true);
+        const expirationTime = tokenResult.expirationTime 
+          ? new Date(tokenResult.expirationTime).getTime() 
+          : 0;
+        const now = new Date().getTime();
+
+        if (expirationTime <= now) {
+          console.warn('Token appears expired. Refreshing immediately...');
+          await user.getIdToken(true);
+          console.log('Token refreshed successfully');
+        } else if (expirationTime - now < 5 * 60 * 1000) {
+          console.warn('Token is expiring soon. Refreshing...');
+          await user.getIdToken(true);
+          console.log('Token refreshed successfully');
+        } else {
+          console.log('Token is valid, no immediate refresh needed.');
+        }
+
+        const bufferTime = 5 * 60 * 1000; // 5-minute buffer
+        const nextRefreshTime = Math.max(expirationTime - now - bufferTime, bufferTime);
+        console.log(`Scheduling next refresh in ${nextRefreshTime / 1000} seconds`);
+        tokenRefreshTimeout = setTimeout(refreshToken, nextRefreshTime);
+
+      } catch (error) {
+        console.error('Token refresh error:', error);
+        tokenRefreshTimeout = setTimeout(refreshToken, 60 * 1000);
+      }
+    };
     
+    refreshToken();
+
+    return () => {
+      if (tokenRefreshTimeout) {
+        clearTimeout(tokenRefreshTimeout);
+      } 
+    };
   } else {
     console.log('no user logged in')
   }
-
 });
+
 const db = getFirestore(app);
 
 // Enhanced token verification function with retry mechanism
@@ -202,7 +140,7 @@ export const makeAuthenticatedRequest = async <T>(
     // If first attempt fails, try force refresh
     token = await verifyFirebaseToken(true);
   }
-
+try{
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -217,7 +155,31 @@ export const makeAuthenticatedRequest = async <T>(
   }
 
   return response.json();
+} catch (error) {
+  if (error instanceof Error && error.message.includes('expired')) {
+    // Attempt to refresh token and retry
+    token = await verifyFirebaseToken(true);
+    
+    const retryResponse = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!retryResponse.ok) {
+      throw new Error(`Request failed after token refresh: ${retryResponse.statusText}`);
+    }
+
+    return retryResponse.json();
+  }
+  throw error;
+}
 };
+
+
 
 export { auth, db };
 

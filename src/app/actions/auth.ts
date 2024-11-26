@@ -180,6 +180,12 @@ export async function createCheckoutSession({
     // First verify the token
     const tokenVerification = await verifyFirebaseTokenWithUid(token, uid);
     if (!tokenVerification.success) {
+      if (tokenVerification.error?.includes('Firebase ID token has expired')) {
+        return {
+          success: false,
+          error: 'Token expired. Please re-authenticate.'
+        };
+      }
       return {
         success: false,
         error: tokenVerification.error || 'Authentication failed'

@@ -1,46 +1,60 @@
+import { stripe } from '@/lib/stripe';
 import { NextRequest, NextResponse } from 'next/server';
-import { createCheckoutSession, verifyFirebaseToken } from '../../actions/auth';
 
-export const POST = async (req: NextRequest): Promise<NextResponse> => {
+export async function POST(req: NextRequest) {
   try {
-    const token = req.headers.get('Authorization')?.split(' ')[1];
-    if (!token) {
-      return NextResponse.json({ error: 'No token provided' }, { status: 401 });
-    }
+    const body = await req.json();
+    const { configurationId } = body;
 
-    // Decode the token to get the uid
-    const tokenVerification = await verifyFirebaseToken(token);
- 
-    if (!tokenVerification.success || !tokenVerification.decodedToken) {
+    if (!configurationId) {
       return NextResponse.json(
-        { error: tokenVerification.error || 'Failed to verify token' },
-        { status: 401 }
+        { error: 'Missing required configurationId in request body.' },
+        { status: 400 }
       );
     }
 
-    const uid = tokenVerification.decodedToken.uid;
-    const { configurationId } = await req.json();
+    const { finish, material, model, imageUrl, unitAmount } = configurationId;
 
-    // Pass `token` and `uid` to `createCheckoutSession`
-    const checkoutResponse = await createCheckoutSession({
-      configId: configurationId,
-      uid,
-      token,
+    if (!finish || !material || !model || !imageUrl || !unitAmount) {
+      return NextResponse.json(
+        { error: 'Invalid or incomplete configuration details.' },
+        { status: 400 }
+      );
+    }
+
+    // Use the NEXT_PUBLIC_URL to construct valid URLs
+    const baseUrl = process.env.NEXT_PUBLIC_URL;
+    if (!baseUrl) {
+      throw new Error('NEXT_PUBLIC_URL is not defined in environment variables.');
+    }
+
+    // Create a Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `Custom ${model} Case (${finish} - ${material})`,
+              images: [imageUrl],
+            },
+            unit_amount: unitAmount, // The price in cents
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`, // Include session ID for reference
+      cancel_url: `${baseUrl}/cancel`,
     });
 
-    if (!checkoutResponse.success) {
-      return NextResponse.json(
-        { error: checkoutResponse.error || 'Failed to create checkout session' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ success: true, url: checkoutResponse.url });
+    return NextResponse.json({ url: session.url });
   } catch (error) {
-    console.error('[Checkout] Error:', error);
+    console.error('Stripe Checkout session error:', error);
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'An unexpected error occurred' },
+      { error: 'Failed to create Stripe Checkout session.' },
       { status: 500 }
     );
   }
-};
+}
