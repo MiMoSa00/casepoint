@@ -1,12 +1,12 @@
 "use client";
 
+import { useEffect, useState } from 'react';
 import Phone from '@/components/Phone';
 import { Button } from '@/components/ui/button';
 import { BASE_PRICE, PRODUCT_PRICES } from '@/config/product';
 import { cn, formatPrice } from '@/lib/utils';
 import { COLORS, MODELS } from '@/validators/option-validator';
 import { Configuration } from '@prisma/client';
-import { useEffect, useState } from 'react';
 import Confetti from 'react-dom-confetti';
 import { useToast } from '@/components/ui/use-toast';
 import LoginModal from '@/components/LoginModal';
@@ -26,10 +26,31 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
   const stripe = useStripe();
   const elements = useElements();
 
+  // Show confetti when component mounts
   useEffect(() => {
     setShowConfetti(true);
   }, []);
 
+  // Handle login state changes
+  useEffect(() => {
+    const handleLogin = () => {
+      const configurationId = localStorage.getItem('configurationId');
+
+      if (configurationId) {
+        const order = JSON.parse(configurationId);
+        window.location.href = `/checkout?configurationId=${order.configurationId.id}`;
+        localStorage.removeItem('orderDetails');
+      }
+    };
+
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        handleLogin();
+      }
+    });
+  }, []);
+
+  // Validate configuration
   if (!configuration?.id || !configuration?.croppedImageUrl) {
     toast({
       title: 'Configuration Error',
@@ -56,7 +77,6 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
   if (material === 'polycarbonate') totalPrice += PRODUCT_PRICES.material.polycarbonate;
   if (finish === 'textured') totalPrice += PRODUCT_PRICES.finish.textured;
 
-  // Handle checkout process
   const handleCheckout = async (): Promise<void> => {
     try {
       const currentUser = auth.currentUser;
@@ -69,23 +89,25 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
           variant: 'destructive',
         });
 
-        localStorage.setItem('orderDetails', JSON.stringify({
-          configurationId: {
-            id: configuration.id,
-            finish: configuration.finish,
-            material: configuration.material,
-            model: configuration.model,
-            imageUrl: configuration.croppedImageUrl,
-            unitAmount: totalPrice, // Pass calculated price to the backend
-          },
-        }));
+        localStorage.setItem(
+          'orderDetails',
+          JSON.stringify({
+            configurationId: {
+              id: configuration.id,
+              finish: configuration.finish,
+              material: configuration.material,
+              model: configuration.model,
+              imageUrl: configuration.croppedImageUrl,
+              unitAmount: totalPrice, // Pass calculated price to the backend
+            },
+          })
+        );
 
         return;
       }
 
       setIsProcessing(true);
 
-      // Call the checkout API
       const response = await fetch('/api/checkout', {
         method: 'POST',
         headers: {
@@ -113,7 +135,6 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
         throw new Error('Invalid response format, expected "url" field.');
       }
 
-      // Redirect to Stripe checkout
       window.location.href = data.url;
     } catch (error) {
       console.error('Checkout error:', error);
@@ -126,24 +147,6 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
       setIsProcessing(false);
     }
   };
-
-  useEffect(() => {
-    const handleLogin = () => {
-      const configurationId = localStorage.getItem('configurationId');
-
-      if (configurationId) {
-        const order = JSON.parse(configurationId);
-        window.location.href = `/checkout?configurationId=${order.configurationId.id}`;
-        localStorage.removeItem('orderDetails');
-      }
-    };
-
-    auth.onAuthStateChanged((user) => {
-      if (user) {
-        handleLogin();
-      }
-    });
-  }, []);
 
   return (
     <>
