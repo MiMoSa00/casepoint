@@ -68,6 +68,18 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
           description: 'Please log in to proceed with checkout.',
           variant: 'destructive',
         });
+
+        localStorage.setItem('orderDetails', JSON.stringify({
+          configurationId: {
+            id: configuration.id,
+            finish: configuration.finish,
+            material: configuration.material,
+            model: configuration.model,
+            imageUrl: configuration.croppedImageUrl,
+            unitAmount: totalPrice, // Pass calculated price to the backend
+          },
+        }));
+
         return;
       }
 
@@ -114,6 +126,24 @@ const DesignPreview: React.FC<DesignPreviewProps> = ({ configuration }) => {
       setIsProcessing(false);
     }
   };
+
+  useEffect(() => {
+    const handleLogin = () => {
+      const configurationId = localStorage.getItem('configurationId');
+
+      if (configurationId) {
+        const order = JSON.parse(configurationId);
+        window.location.href = `/checkout?configurationId=${order.configurationId.id}`;
+        localStorage.removeItem('orderDetails');
+      }
+    };
+
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        handleLogin();
+      }
+    });
+  }, []);
 
   return (
     <>

@@ -1,41 +1,50 @@
-// 'use server'
+"use server"
 
-// import { db } from '@/db';
-// import { getKindeServerSession } from '@kinde-oss/kinde-auth-nextjs/server';
+import { adminAuth } from '@/firebase/firebaseAdmin'; // Keep Firebase Admin SDK
+import { db } from '@/db';
 
-// export const getAuthStatus = async () => {
-//   try {
-//     const { getUser } = getKindeServerSession();
-    
-//     const user = await getUser();
-    
-//     if (!user?.id || !user.email) {
-//       throw new Error('Invalid user data');
-//     }
+// Function to get the current logged-in user using Firebase Admin SDK
+const getFirebaseUser = async (idToken: string) => {
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
+    return decodedToken;
+  } catch (error) {
+    console.error("Error verifying token:", error);
+    throw new Error("Authentication failed");
+  }
+};
 
-//     const existingUser = await db.user.findFirst({
-//       where: { id: user.id },
-//     });
+// Server-side function to check user in DB and create if doesn't exist
+export const getAuthStatus = async (idToken: string) => {
+  try {
+    // Get Firebase user data (UID, email)
+    const firebaseUser = await getFirebaseUser(idToken);
+    const { uid, email } = firebaseUser;
 
-  
-//     if (!existingUser) {
-//       await db.user.create({
-//         data: {
-//           id: user.id,
-//           email: user.email,
-//         },
-//       });
-//     }
+    if (!uid || !email) {
+      throw new Error("Invalid user data");
+    }
 
-   
-//     return { success: true, user: { id: user.id, email: user.email } };
-    
-//   } catch (error) {
-//     console.error("Error in getAuthStatus:", error);
+    // Check if the user exists in the database
+    const existingUser = await db.user.findFirst({
+      where: { firebaseUid: uid }, // Assumes firebaseUid is stored in your DB
+    });
 
-//     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    
-   
-//     throw new Error("Authentication failed: " + errorMessage);
-//   }
-// }
+    // If the user doesn't exist, create a new one
+    if (!existingUser) {
+      await db.user.create({
+        data: {
+          firebaseUid: uid, // Store the Firebase UID in DB
+          email: email,
+        },
+      });
+    }
+
+    // Return a success response
+    return { success: true, user: { id: uid, email: email } };
+
+  } catch (error) {
+    console.error("Error in getAuthStatus:", error);
+    throw new Error("Authentication failed");
+  }
+};

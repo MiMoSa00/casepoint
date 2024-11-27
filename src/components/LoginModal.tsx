@@ -10,6 +10,7 @@ import Image from 'next/image';
 import { auth } from '@/firebase/firebaseConfig'; // Make sure to import your Firebase configuration
 import { signInWithEmailAndPassword } from 'firebase/auth'; // Import Firebase auth function
 import { buttonVariants } from './ui/button';
+import Link from 'next/link';
 
 const LoginModal = ({
   isOpen,
@@ -72,12 +73,17 @@ const LoginModal = ({
             onChange={(e) => setPassword(e.target.value)}
             className='mb-4 p-2 border border-gray-300 rounded w-full'
           />
+          <div className='flex gap-32'>
           <button
             onClick={handleLogin}
             className={buttonVariants({ variant: 'default' })}
           >
             Login
           </button>
+         <Link href='/api/auth/register' onClick={handleLogin}
+            className={buttonVariants({ variant: 'default' })}>Sign up</Link>
+          </div>
+         
         </div>
       </DialogContent>
     </Dialog>
